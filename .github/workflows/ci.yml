@@ -85,7 +85,12 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@nightly
-      - run: sudo apt-get update && sudo apt-get install -y libegl1 libgles2 libgl1-mesa-dri
+      # libc6-dbg is Memcheck's equivalent of Arch's glibc-debug: without a
+      # matching debug build of ld.so it cannot set up its mandatory redirections
+      # and refuses to start.
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgles2 libgl1-mesa-dri valgrind libc6-dbg
       - run: ./scripts/fetch-fixtures.sh
 
       # ASAN replaces malloc/free process-wide, so allocations inside the
@@ -120,3 +125,15 @@ jobs:
             echo "leak total grew with iteration count" >&2
             exit 1
           fi
+
+      # The only check that sees uninitialised reads inside the uninstrumented
+      # libmediapipe.so, which is what every task's mem::zeroed() result struct
+      # depends on not happening. Leak checking is off on purpose: MediaPipe's
+      # static initialisers leak unconditionally, and would drown the signal.
+      - name: Memcheck (memory errors only)
+        env:
+          LIBGL_ALWAYS_SOFTWARE: 1
+        run: |
+          cargo build --example stress
+          valgrind --tool=memcheck --track-origins=yes --leak-check=no \
+            --error-exitcode=1 ./target/debug/examples/stress 1

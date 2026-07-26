@@ -195,15 +195,36 @@ RUSTFLAGS=-Zsanitizer=leak cargo +nightly run --target x86_64-unknown-linux-gnu 
 At the time of writing: ASAN reports 0 errors at N=25, and LSAN reports ~152 KB
 at both N=1 and N=100 with no leak trace passing through this crate's code.
 
-**Valgrind does not work here.** On Arch it fails at startup for *every* binary,
-`/bin/true` included, because `ld-linux-x86-64.so.2` ships with no dynamic symbol
-table and Memcheck's mandatory `memcmp` redirection cannot be set up. Neither
-`--enable-debuginfod=yes` nor `--extra-debuginfo-path` pointed at an extracted
-`glibc-debug` package fixed it. Installing `glibc-debug` properly may — it lives
-in the `[core-debug]` repo, which is not enabled by default — but that is
-untested. Memcheck would add one thing the sanitizers cannot: reads of
-uninitialised memory inside the uninstrumented library. Until someone confirms it
-works, ASAN plus LSAN is the coverage this project relies on.
+**Valgrind Memcheck — uninitialised reads.** This is the one thing the
+sanitizers cannot do: catch a read of uninitialised memory *inside* the
+uninstrumented `libmediapipe.so`. It matters because every task zeroes its result
+struct and trusts MediaPipe to fill it (`mem::zeroed()` in `detect_inner`), so a
+field the C side never writes would be read as zero rather than flagged.
+
+Run it with leak checking **off**, so `ERROR SUMMARY` means memory errors only —
+MediaPipe's static initialisers leak unconditionally and would otherwise drown
+the signal:
+
+```sh
+valgrind --tool=memcheck --track-origins=yes --leak-check=no --error-exitcode=1 \
+    ./target/debug/examples/stress 1
+```
+
+At the time of writing that reports **0 errors from 0 contexts**, with no
+suppressions needed — no invalid reads or writes, no invalid or mismatched
+frees, no uninitialised values, and no false positives from XNNPACK's hand
+vectorised code. With `--leak-check=full` it additionally reports ~6 KB
+definitely lost in 184 blocks, every one of them inside MediaPipe's own
+`_GLOBAL__sub_I_*` calculator registration or `GpuResources`/`GlContext` setup,
+none passing through this crate.
+
+On Arch, Memcheck needs `glibc-debug`, which lives in the `[core-debug]` repo
+that is not enabled by default. **The versions must match**: `pacman -Sy
+glibc-debug` on its own installs debug symbols for a newer glibc than the one
+installed, and Memcheck then rejects them with a `.gnu_debuglink` CRC mismatch
+and refuses to start — for every binary, `/bin/true` included. `pacman -Syu` is
+the fix. Neither `--enable-debuginfod=yes` nor `--allow-mismatched-debuginfo=yes`
+works around it; the latter governs a later check than the debuglink CRC.
 
 ## Hooks
 
