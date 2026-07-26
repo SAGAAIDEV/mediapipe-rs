@@ -1,5 +1,7 @@
 # mediapipe
 
+[![crates.io](https://img.shields.io/crates/v/mediapipe.svg)](https://crates.io/crates/mediapipe)
+[![docs.rs](https://docs.rs/mediapipe/badge.svg)](https://docs.rs/mediapipe)
 [![CI](https://github.com/nikicat/mediapipe-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/nikicat/mediapipe-rs/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![MSRV](https://img.shields.io/badge/rustc-1.85%2B-orange.svg)](https://blog.rust-lang.org/2025/02/20/Rust-1.85.0.html)
