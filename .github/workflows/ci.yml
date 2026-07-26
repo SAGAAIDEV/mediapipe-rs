@@ -77,17 +77,29 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-  # Leaks are the failure mode that this crate's tests cannot see: a missed
-  # Mp*CloseResult still returns correct results. MediaPipe leaks a fixed amount
-  # at startup, so the check is that the total does not grow with the iteration
-  # count. See examples/stress.rs.
-  leaks:
+  # The failures this crate's tests structurally cannot see: a missed
+  # Mp*CloseResult still returns correct results, and a use-after-free on a
+  # reclaimed result usually returns plausible numbers. See examples/stress.rs.
+  sanitizers:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@nightly
       - run: sudo apt-get update && sudo apt-get install -y libegl1 libgles2 libgl1-mesa-dri
       - run: ./scripts/fetch-fixtures.sh
+
+      # ASAN replaces malloc/free process-wide, so allocations inside the
+      # uninstrumented libmediapipe.so are covered: this is what catches a
+      # double-close or a read of a result MediaPipe already freed.
+      - name: AddressSanitizer
+        env:
+          RUSTFLAGS: -Zsanitizer=address
+          ASAN_OPTIONS: detect_leaks=0:detect_stack_use_after_return=1
+          LIBGL_ALWAYS_SOFTWARE: 1
+        run: cargo +nightly run --target x86_64-unknown-linux-gnu --example stress -- 25
+
+      # MediaPipe leaks a fixed ~152 KB of GL-context state at startup, so the
+      # absolute total is meaningless; only its growth with N is a signal.
       - name: leak total must not scale with iterations
         env:
           RUSTFLAGS: -Zsanitizer=leak
@@ -102,8 +114,8 @@ jobs:
           one=$(run_n 1)
           many=$(run_n 50)
           echo "N=1: ${one:-0} bytes, N=50: ${many:-0} bytes"
-          # Allow generous slack for thread-pool noise; a real per-call leak
-          # would multiply the total, not nudge it.
+          # Generous slack for thread-pool noise; a real per-call leak would
+          # multiply the total, not nudge it.
           if [ "${many:-0}" -gt "$(( ${one:-0} + 65536 ))" ]; then
             echo "leak total grew with iteration count" >&2
             exit 1

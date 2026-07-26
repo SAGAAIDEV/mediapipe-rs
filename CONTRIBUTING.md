@@ -164,26 +164,46 @@ Generated code cannot satisfy the first three meaningfully, so
 almost all on self-describing accessors and error variants whose `thiserror`
 messages already say more than a doc line would.
 
-## Checking for leaks
+## Checking memory correctness
 
-The test suite cannot see a leak — a missed `Mp*CloseResult` still returns
-correct results. Use `examples/stress.rs`, which drives every FFI path in a loop:
+The test suite structurally cannot see the failures that matter most here: a
+missed `Mp*CloseResult` still returns correct results, and a use-after-free on a
+result MediaPipe has already reclaimed usually returns plausible numbers.
+`examples/stress.rs` drives every FFI path in a loop so a sanitizer can.
+
+**AddressSanitizer — use-after-free, double-free, overflows.** The important
+property is that ASAN replaces `malloc`/`free` process-wide, so allocations made
+*inside* the uninstrumented `libmediapipe.so` are covered too. That is what makes
+it able to catch a double-close, or reading a result after MediaPipe freed it.
+
+```sh
+RUSTFLAGS=-Zsanitizer=address \
+ASAN_OPTIONS=detect_leaks=0:detect_stack_use_after_return=1 \
+  cargo +nightly run --target x86_64-unknown-linux-gnu --example stress -- 25
+```
+
+**LeakSanitizer — leaks.** MediaPipe leaks ~152 KB at startup no matter what
+(Mesa's EGL driver and MediaPipe's own `GlContext`/`GpuResources` never free
+their one-time state), so the absolute number is meaningless. **The check is that
+the total does not grow with the iteration count.**
 
 ```sh
 RUSTFLAGS=-Zsanitizer=leak cargo +nightly run --target x86_64-unknown-linux-gnu \
-    --example stress -- 1
-RUSTFLAGS=-Zsanitizer=leak cargo +nightly run --target x86_64-unknown-linux-gnu \
-    --example stress -- 100
+    --example stress -- 1     # and again with 100
 ```
 
-MediaPipe leaks ~152 KB at startup no matter what — Mesa's EGL driver and
-MediaPipe's own `GlContext`/`GpuResources` never free their one-time state — so
-the absolute number means nothing. **The total must not grow with the iteration
-count.** At the time of writing, N=1 and N=100 both report ~152 KB and no leak
-trace passes through this crate's code.
+At the time of writing: ASAN reports 0 errors at N=25, and LSAN reports ~152 KB
+at both N=1 and N=100 with no leak trace passing through this crate's code.
 
-Valgrind is not a substitute: on a distribution without glibc debuginfo it
-refuses to start at all.
+**Valgrind does not work here.** On Arch it fails at startup for *every* binary,
+`/bin/true` included, because `ld-linux-x86-64.so.2` ships with no dynamic symbol
+table and Memcheck's mandatory `memcmp` redirection cannot be set up. Neither
+`--enable-debuginfod=yes` nor `--extra-debuginfo-path` pointed at an extracted
+`glibc-debug` package fixed it. Installing `glibc-debug` properly may — it lives
+in the `[core-debug]` repo, which is not enabled by default — but that is
+untested. Memcheck would add one thing the sanitizers cannot: reads of
+uninitialised memory inside the uninstrumented library. Until someone confirms it
+works, ASAN plus LSAN is the coverage this project relies on.
 
 ## Hooks
 
