@@ -16,4 +16,9 @@ bindgen vendor/wrapper.h -o src/sys/bindings.rs \
   --raw-line '#![allow(missing_debug_implementations)]' \
   -- -x c++ -std=c++17 -Ivendor/headers
 
+# bindgen's own formatting differs from rustfmt's, so without this the committed
+# file (which `cargo fmt` has touched) never matches a fresh run, and CI's
+# "bindings are up to date" diff check fails on formatting alone.
+rustfmt --edition 2024 src/sys/bindings.rs
+
 echo "regenerated from $(cat vendor/REF)"
