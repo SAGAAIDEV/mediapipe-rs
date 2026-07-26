@@ -143,12 +143,66 @@ Regenerate only via `scripts/gen-bindings.sh` — never hand-edit it. The header
 in `vendor/headers/` are Google's, unmodified apart from deleting the C++-only
 `*_converter.h`; `vendor/REF` records the exact upstream commit they came from.
 
+## Lints
+
+Levels are set in `Cargo.toml` at whatever the codebase currently satisfies, so
+each one is a convention from this document that cannot decay:
+
+| lint | why |
+|---|---|
+| `unsafe_op_in_unsafe_fn` = deny | an `unsafe fn` body is not a blanket licence |
+| `clippy::undocumented_unsafe_blocks` = deny | the SAFETY-comment rule above, mechanised |
+| `clippy::cast_possible_truncation` = deny | a truncated length handed to C is read as a length |
+| `clippy::cast_possible_wrap` = deny | ditto for a wrapped `u32` → `i32` |
+| `missing_debug_implementations` = warn | public handles should be printable |
+
+Generated code cannot satisfy the first three meaningfully, so
+`scripts/gen-bindings.sh` emits `#![allow(…)]` for them at the top of
+`bindings.rs`. Widen that allow-list rather than lowering a crate-level lint.
+
+`missing_docs` is deliberately **not** enabled: it would demand 144 doc comments,
+almost all on self-describing accessors and error variants whose `thiserror`
+messages already say more than a doc line would.
+
+## Checking for leaks
+
+The test suite cannot see a leak — a missed `Mp*CloseResult` still returns
+correct results. Use `examples/stress.rs`, which drives every FFI path in a loop:
+
+```sh
+RUSTFLAGS=-Zsanitizer=leak cargo +nightly run --target x86_64-unknown-linux-gnu \
+    --example stress -- 1
+RUSTFLAGS=-Zsanitizer=leak cargo +nightly run --target x86_64-unknown-linux-gnu \
+    --example stress -- 100
+```
+
+MediaPipe leaks ~152 KB at startup no matter what — Mesa's EGL driver and
+MediaPipe's own `GlContext`/`GpuResources` never free their one-time state — so
+the absolute number means nothing. **The total must not grow with the iteration
+count.** At the time of writing, N=1 and N=100 both report ~152 KB and no leak
+trace passes through this crate's code.
+
+Valgrind is not a substitute: on a distribution without glibc debuginfo it
+refuses to start at all.
+
+## Hooks
+
+`prek install` (or `pre-commit install`) wires up `.pre-commit-config.yaml`:
+`cargo fmt`, `cargo clippy -D warnings`, shellcheck, whitespace fixers, and a
+check that vendored headers were not staged without regenerated bindings. Only
+fast local checks live there — `cargo test` needs a 34 MB download and the
+fixtures, so it is CI's job.
+
+`scripts/*.sh` are POSIX `sh` unless they declare otherwise; shellcheck enforces
+it, and it has already caught one script using bash-only process substitution
+under a `#!/bin/sh` shebang.
+
 ## Before committing
 
 ```sh
 cargo test                                    # 15 integration + 7 doc tests
 cargo clippy --all-targets                    # must be silent
-cargo clippy --no-default-features            # the offline path still compiles
+cargo clippy --no-default-features --all-targets
 MEDIAPIPE_LIB=… cargo test --no-default-features
 cargo run --example detect_face -- models/portrait.jpg
 ```

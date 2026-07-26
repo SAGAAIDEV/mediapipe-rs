@@ -14,16 +14,36 @@ pub use bindings::*;
 /// see `base_options_converter.cc`.)
 pub(crate) enum ModelHold {
     Path(std::ffi::CString),
-    Buf(Vec<u8>),
+    /// The length is stored rather than recomputed from the `Vec`, so the bounds
+    /// check happens exactly once, at construction, and `parts` has no cast left
+    /// to get wrong.
+    Buf {
+        bytes: Vec<u8>,
+        len: std::os::raw::c_uint,
+    },
 }
 
 impl ModelHold {
     pub(crate) fn new(src: &crate::types::ModelSource) -> crate::error::Result<Self> {
         Ok(match src {
-            crate::types::ModelSource::Path(p) => ModelHold::Path(std::ffi::CString::new(
-                p.as_os_str().as_encoded_bytes(),
-            )?),
-            crate::types::ModelSource::Bytes(b) => ModelHold::Buf(b.clone()),
+            crate::types::ModelSource::Path(p) => {
+                ModelHold::Path(std::ffi::CString::new(p.as_os_str().as_encoded_bytes())?)
+            }
+            crate::types::ModelSource::Bytes(b) => {
+                // `model_asset_buffer_count` is a C `unsigned int`; truncating it
+                // would tell MediaPipe the model is shorter than it is.
+                let len = std::os::raw::c_uint::try_from(b.len()).map_err(|_| {
+                    crate::error::Error::TooLarge {
+                        what: "model buffer",
+                        len: b.len(),
+                        limit: u64::from(std::os::raw::c_uint::MAX),
+                    }
+                })?;
+                ModelHold::Buf {
+                    bytes: b.clone(),
+                    len,
+                }
+            }
         })
     }
 
@@ -37,9 +57,9 @@ impl ModelHold {
     ) {
         match self {
             ModelHold::Path(p) => (std::ptr::null(), 0, p.as_ptr()),
-            ModelHold::Buf(b) => (
-                b.as_ptr() as *const std::os::raw::c_char,
-                b.len() as std::os::raw::c_uint,
+            ModelHold::Buf { bytes, len } => (
+                bytes.as_ptr().cast::<std::os::raw::c_char>(),
+                *len,
                 std::ptr::null(),
             ),
         }

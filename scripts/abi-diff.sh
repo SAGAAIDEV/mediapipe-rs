@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 # Compare the public MediaPipe C headers between two refs and separate harmless
 # renames from real layout changes.
 #

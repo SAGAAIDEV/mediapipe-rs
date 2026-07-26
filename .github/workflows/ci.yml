@@ -1,0 +1,110 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # Everything that needs neither the native library nor the model fixtures.
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --check
+      # Lint levels live in Cargo.toml; -D warnings promotes the "warn" ones.
+      - run: cargo clippy --all-targets --all-features -- -D warnings
+      # The offline path must keep compiling: library consumers may disable it.
+      - run: cargo clippy --all-targets --no-default-features -- -D warnings
+      - run: shellcheck scripts/*.sh
+      - run: cargo doc --no-deps
+        env:
+          RUSTDOCFLAGS: -D warnings
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # MediaPipe creates an EGL/GL context even for CPU inference, so a bare
+      # headless runner needs a software GL stack.
+      - run: sudo apt-get update && sudo apt-get install -y libegl1 libgles2 libgl1-mesa-dri
+      - run: ./scripts/fetch-fixtures.sh
+      # Caches libmediapipe between runs; the key is the pinned version, which is
+      # what the crate keys its own cache directory on.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/mediapipe-rs
+          key: libmediapipe-${{ runner.os }}-0.10.35
+      - run: cargo test --all-features
+        env:
+          LIBGL_ALWAYS_SOFTWARE: 1
+      # Same suite against an explicitly supplied library, with downloading off.
+      - name: test --no-default-features
+        run: |
+          MEDIAPIPE_LIB="$HOME/.cache/mediapipe-rs/0.10.35/libmediapipe.so" \
+            cargo test --no-default-features
+        env:
+          LIBGL_ALWAYS_SOFTWARE: 1
+
+  # The expensive half of the bindings check: regenerate and diff. Catches both
+  # hand-edits to the generated file and headers changed without regenerating.
+  bindings:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - run: sudo apt-get update && sudo apt-get install -y libclang-dev
+      - run: cargo install bindgen-cli --version 0.72.1 --locked
+      - run: ./scripts/gen-bindings.sh
+      - name: bindings are up to date
+        run: git diff --exit-code -- src/sys/bindings.rs
+
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  # Leaks are the failure mode that this crate's tests cannot see: a missed
+  # Mp*CloseResult still returns correct results. MediaPipe leaks a fixed amount
+  # at startup, so the check is that the total does not grow with the iteration
+  # count. See examples/stress.rs.
+  leaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@nightly
+      - run: sudo apt-get update && sudo apt-get install -y libegl1 libgles2 libgl1-mesa-dri
+      - run: ./scripts/fetch-fixtures.sh
+      - name: leak total must not scale with iterations
+        env:
+          RUSTFLAGS: -Zsanitizer=leak
+          LIBGL_ALWAYS_SOFTWARE: 1
+        run: |
+          set -euo pipefail
+          run_n() {
+            cargo +nightly run -q --target x86_64-unknown-linux-gnu \
+              --example stress -- "$1" 2>&1 \
+              | sed -n 's/.*LeakSanitizer: \([0-9]*\) byte.*/\1/p' | tail -1
+          }
+          one=$(run_n 1)
+          many=$(run_n 50)
+          echo "N=1: ${one:-0} bytes, N=50: ${many:-0} bytes"
+          # Allow generous slack for thread-pool noise; a real per-call leak
+          # would multiply the total, not nudge it.
+          if [ "${many:-0}" -gt "$(( ${one:-0} + 65536 ))" ]; then
+            echo "leak total grew with iteration count" >&2
+            exit 1
+          fi

@@ -22,7 +22,8 @@ const PORTRAIT: &str = "models/portrait.jpg";
 /// True when fixtures are present. Tests return early otherwise so a fresh
 /// checkout without network does not report failures.
 fn fixtures() -> bool {
-    let ok = Path::new(DETECTOR).exists() && Path::new(LANDMARKER).exists()
+    let ok = Path::new(DETECTOR).exists()
+        && Path::new(LANDMARKER).exists()
         && Path::new(PORTRAIT).exists();
     if !ok {
         eprintln!("skipping: run ./scripts/fetch-fixtures.sh first");
@@ -33,7 +34,9 @@ fn fixtures() -> bool {
 fn detector() -> FaceDetector {
     FaceDetector::builder(ModelSource::path(DETECTOR))
         .delegate(Delegate::Cpu)
-        .min_suppression_threshold(IouThreshold::new(0.3).expect("0.3 should be a valid overlap ratio"))
+        .min_suppression_threshold(
+            IouThreshold::new(0.3).expect("0.3 should be a valid overlap ratio"),
+        )
         .build()
         .expect("the fetched BlazeFace model should build a detector")
 }
@@ -48,13 +51,24 @@ fn detects_one_face_at_the_known_position() {
         return;
     }
     let image = portrait();
-    assert_eq!(image.size(), Size { width: 820, height: 1024 });
+    assert_eq!(
+        image.size(),
+        Size {
+            width: 820,
+            height: 1024
+        }
+    );
 
-    let faces = detector().detect(&image).expect("an image-mode detector should accept an image");
+    let faces = detector()
+        .detect(&image)
+        .expect("an image-mode detector should accept an image");
     assert_eq!(faces.len(), 1, "portrait.jpg has exactly one face");
 
     let face = &faces[0];
-    let score = face.score().expect("BlazeFace should report one scored category per face").get();
+    let score = face
+        .score()
+        .expect("BlazeFace should report one scored category per face")
+        .get();
     assert!(score > 0.9, "score {score} should be > 0.9");
 
     let b = face.bounding_box;
@@ -81,7 +95,9 @@ fn keypoints_convert_into_the_pixel_bounding_box() {
         return;
     }
     let image = portrait();
-    let faces = detector().detect(&image).expect("an image-mode detector should accept an image");
+    let faces = detector()
+        .detect(&image)
+        .expect("an image-mode detector should accept an image");
     let face = &faces[0];
 
     for (i, kp) in face.keypoints.iter().enumerate() {
@@ -111,7 +127,9 @@ fn landmarks_blendshapes_and_transform() {
         .build()
         .expect("the fetched face_landmarker.task should build a landmarker");
 
-    let result = landmarker.detect(&portrait()).expect("an image-mode landmarker should accept an image");
+    let result = landmarker
+        .detect(&portrait())
+        .expect("an image-mode landmarker should accept an image");
 
     assert_eq!(result.landmarks.len(), 1);
     assert_eq!(result.landmarks[0].len(), 478, "standard face mesh");
@@ -146,7 +164,9 @@ fn video_mode_accepts_increasing_timestamps() {
         return;
     }
     let mut detector = FaceDetector::builder(ModelSource::path(DETECTOR))
-        .min_suppression_threshold(IouThreshold::new(0.3).expect("0.3 should be a valid overlap ratio"))
+        .min_suppression_threshold(
+            IouThreshold::new(0.3).expect("0.3 should be a valid overlap ratio"),
+        )
         .build_for_video()
         .expect("the fetched BlazeFace model should build a video detector");
 
@@ -169,7 +189,9 @@ fn wrong_running_mode_is_an_error() {
     let mut detector = FaceDetector::builder(ModelSource::path(DETECTOR))
         .build_for_video()
         .expect("the fetched BlazeFace model should build a video detector");
-    let err = detector.detect(&portrait()).expect_err("a video-mode task should reject an image-mode call");
+    let err = detector
+        .detect(&portrait())
+        .expect_err("a video-mode task should reject an image-mode call");
     assert!(matches!(err, Error::Mp { .. }), "got {err:?}");
 }
 
@@ -189,13 +211,16 @@ fn live_stream_delivers_results_in_order_and_stops_at_drop() {
             let faces = result.map(|r| r.landmarks.len()).unwrap_or(usize::MAX);
             // The callback's image borrows a stack MpImage owned by MediaPipe;
             // reading it here is fine, keeping it would not be.
-            tx.send((timestamp, faces, image.size())).expect("the receiver should outlive the stream");
+            tx.send((timestamp, faces, image.size()))
+                .expect("the receiver should outlive the stream");
         })
         .expect("a free callback slot should be available");
 
     let image = portrait();
     const FRAMES: i64 = 10;
-    let sent: Vec<Timestamp> = (0..FRAMES).map(|f| Timestamp::from_millis(f * 33)).collect();
+    let sent: Vec<Timestamp> = (0..FRAMES)
+        .map(|f| Timestamp::from_millis(f * 33))
+        .collect();
     for (frame, ts) in sent.iter().enumerate() {
         stream
             .send(&image, *ts)
@@ -208,7 +233,7 @@ fn live_stream_delivers_results_in_order_and_stops_at_drop() {
 
     let got: Vec<_> = rx.try_iter().collect();
     assert!(!got.is_empty(), "no results at all");
-    assert!(got.len() as i64 <= FRAMES, "more results than frames sent");
+    assert!(got.len() <= sent.len(), "more results than frames sent");
 
     let mut last: Option<Timestamp> = None;
     for (ts, faces, size) in &got {
@@ -218,7 +243,13 @@ fn live_stream_delivers_results_in_order_and_stops_at_drop() {
         }
         last = Some(*ts);
         assert_eq!(*faces, 1, "at {ts:?}");
-        assert_eq!(*size, Size { width: 820, height: 1024 });
+        assert_eq!(
+            *size,
+            Size {
+                width: 820,
+                height: 1024
+            }
+        );
     }
 
     // The sender lived in the dropped callback, so the channel being closed is
@@ -229,8 +260,8 @@ fn live_stream_delivers_results_in_order_and_stops_at_drop() {
     );
 
     // And the freed slot must be reusable.
-    let again = FaceLandmarker::builder(ModelSource::path(LANDMARKER))
-        .build_stream(move |_, _, _| {});
+    let again =
+        FaceLandmarker::builder(ModelSource::path(LANDMARKER)).build_stream(move |_, _, _| {});
     assert!(again.is_ok(), "callback slot was not released on drop");
 }
 
@@ -279,8 +310,7 @@ fn live_stream_slot_pool_is_bounded() {
     let mut streams = Vec::new();
     let mut exhausted = None;
     for i in 0..16 {
-        match FaceLandmarker::builder(ModelSource::path(LANDMARKER))
-            .build_stream(move |_, _, _| {})
+        match FaceLandmarker::builder(ModelSource::path(LANDMARKER)).build_stream(move |_, _, _| {})
         {
             Ok(s) => streams.push(s),
             Err(e) => {
@@ -298,7 +328,11 @@ fn live_stream_slot_pool_is_bounded() {
         (1..=8).contains(&i),
         "claimed {i} streams before the pool of 8 ran out"
     );
-    assert_eq!(streams.len(), i, "every successful build should hold a slot");
+    assert_eq!(
+        streams.len(),
+        i,
+        "every successful build should hold a slot"
+    );
 
     drop(streams);
     assert!(
@@ -318,7 +352,9 @@ fn rotation_is_applied() {
         return;
     }
     let image = portrait();
-    let upright = detector().detect(&image).expect("an image-mode detector should accept an image");
+    let upright = detector()
+        .detect(&image)
+        .expect("an image-mode detector should accept an image");
     assert_eq!(upright.len(), 1);
 
     let rotated = detector()
@@ -342,7 +378,9 @@ fn invalid_inputs_are_rejected_before_reaching_c() {
     // Out-of-range values are rejected where they are written, not deep inside
     // build(), and the two 0..1 quantities report themselves distinctly.
     match Confidence::new(1.5).expect_err("1.5 should be rejected, confidences are 0..=1") {
-        Error::OutOfRange { quantity, value, .. } => {
+        Error::OutOfRange {
+            quantity, value, ..
+        } => {
             assert_eq!(quantity, "confidence");
             assert_eq!(value, 1.5);
         }
@@ -354,12 +392,25 @@ fn invalid_inputs_are_rejected_before_reaching_c() {
     }
 
     // A short pixel buffer would be an out-of-bounds read inside MediaPipe.
-    let err = Image::from_rgb(Size { width: 4, height: 4 }, &[0u8; 10]).expect_err("a 10-byte buffer should be rejected for a 4x4 RGB image");
+    let err = Image::from_rgb(
+        Size {
+            width: 4,
+            height: 4,
+        },
+        &[0u8; 10],
+    )
+    .expect_err("a 10-byte buffer should be rejected for a 4x4 RGB image");
     assert!(
-        matches!(err, Error::BufferSize { expected: 48, got: 10, .. }),
+        matches!(
+            err,
+            Error::BufferSize {
+                expected: 48,
+                got: 10,
+                ..
+            }
+        ),
         "got {err:?}"
     );
-
 }
 
 #[test]
@@ -422,13 +473,26 @@ fn landmark_xy_drops_the_incomparable_z() {
     let lm = result.landmarks[0][0].point;
     assert_eq!(lm.xy().x(), lm.x());
     assert_eq!(lm.xy().y(), lm.y());
-    assert_eq!(lm.to_pixels(Size { width: 100, height: 100 }), lm.xy().to_pixels(Size { width: 100, height: 100 }));
+    assert_eq!(
+        lm.to_pixels(Size {
+            width: 100,
+            height: 100
+        }),
+        lm.xy().to_pixels(Size {
+            width: 100,
+            height: 100
+        })
+    );
 }
 
 #[test]
 fn image_from_rgb_roundtrips_dimensions() {
-    let size = Size { width: 64, height: 48 };
-    let image = Image::from_rgb(size, &vec![128u8; 64 * 48 * 3]).expect("a correctly sized RGB buffer should be accepted");
+    let size = Size {
+        width: 64,
+        height: 48,
+    };
+    let image = Image::from_rgb(size, &vec![128u8; 64 * 48 * 3])
+        .expect("a correctly sized RGB buffer should be accepted");
     assert_eq!(image.size(), size);
     assert_eq!(image.channels(), 3);
 }
@@ -438,14 +502,16 @@ fn image_from_rgb_roundtrips_dimensions() {
 /// `sys::compat` cover the exact offsets at compile time.
 #[test]
 fn abi_detection() {
-    let lib = mediapipe::loader::lib().expect("libmediapipe should be loadable, the other tests depend on it");
+    let lib = mediapipe::loader::lib()
+        .expect("libmediapipe should be loadable, the other tests depend on it");
     eprintln!("abi={:?} source={:?}", lib.abi, lib.source);
 
     use mediapipe::sys;
     assert_eq!(size_of::<sys::MpBaseOptions>(), 72);
     assert_eq!(size_of::<sys::compat::MpBaseOptionsV35>(), 56);
     assert_eq!(
-        size_of::<sys::MpFaceDetectorOptions>() - size_of::<sys::compat::MpFaceDetectorOptionsV35>(),
+        size_of::<sys::MpFaceDetectorOptions>()
+            - size_of::<sys::compat::MpFaceDetectorOptionsV35>(),
         16
     );
     assert_eq!(

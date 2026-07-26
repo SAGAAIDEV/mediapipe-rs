@@ -39,6 +39,16 @@ pub struct Lib {
     pub source: LibrarySource,
 }
 
+impl std::fmt::Debug for Lib {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // `raw` is a table of 119 function pointers; nobody wants to read it.
+        f.debug_struct("Lib")
+            .field("abi", &self.abi)
+            .field("source", &self.source)
+            .finish_non_exhaustive()
+    }
+}
+
 static LIB: OnceLock<Lib> = OnceLock::new();
 static LOAD_LOCK: Mutex<()> = Mutex::new(());
 
@@ -252,11 +262,11 @@ fn fetch(dest: &Path) -> Result<PathBuf> {
                 .ok()
                 .is_some_and(|f| f.name().ends_with(TARGET.lib_file_name))
         })
-        .ok_or_else(|| {
-            Error::Download(format!("wheel contains no {}", TARGET.lib_file_name))
-        })?;
+        .ok_or_else(|| Error::Download(format!("wheel contains no {}", TARGET.lib_file_name)))?;
 
-    let dir = dest.parent().expect("cache path should have a parent, it is built by joining onto a cache dir");
+    let dir = dest
+        .parent()
+        .expect("cache path should have a parent, it is built by joining onto a cache dir");
     std::fs::create_dir_all(dir)?;
 
     // Write beside the destination and rename, so a torn download or a

@@ -478,6 +478,8 @@ pub(crate) unsafe fn opt_string(p: *const std::os::raw::c_char) -> Option<String
     if p.is_null() {
         None
     } else {
+        // SAFETY: non-null here, and the caller guarantees a NUL-terminated
+        // string owned by MediaPipe.
         Some(
             unsafe { std::ffi::CStr::from_ptr(p) }
                 .to_string_lossy()
@@ -493,7 +495,9 @@ impl Category {
         Category {
             index: c.index,
             score: Confidence::from_raw(c.score),
+            // SAFETY: a field of the live result this function's contract covers.
             category_name: unsafe { opt_string(c.category_name) },
+            // SAFETY: a field of the live result this function's contract covers.
             display_name: unsafe { opt_string(c.display_name) },
         }
     }
@@ -506,6 +510,7 @@ impl Category {
             return Vec::new();
         }
         (0..count as usize)
+            // SAFETY: the index is below the count MediaPipe reported for this array.
             .map(|i| unsafe { Category::from_raw(&*ptr.add(i)) })
             .collect()
     }
@@ -517,6 +522,7 @@ impl Keypoint {
     pub(crate) unsafe fn from_raw(k: &sys::MpNormalizedKeypoint) -> Self {
         Keypoint {
             point: NormalizedPoint2::from_raw(k.x, k.y),
+            // SAFETY: a field of the live result this function's contract covers.
             label: unsafe { opt_string(k.label) },
             score: k.has_score.then(|| Confidence::from_raw(k.score)),
         }
@@ -531,6 +537,7 @@ impl NormalizedLandmark {
             point: NormalizedPoint3::from_raw(l.x, l.y, l.z),
             visibility: l.has_visibility.then(|| Confidence::from_raw(l.visibility)),
             presence: l.has_presence.then(|| Confidence::from_raw(l.presence)),
+            // SAFETY: a field of the live result this function's contract covers.
             name: unsafe { opt_string(l.name) },
         }
     }

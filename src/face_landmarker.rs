@@ -37,11 +37,13 @@ impl FaceLandmarkerResult {
         } else {
             (0..raw.face_landmarks_count as usize)
                 .map(|f| {
+                    // SAFETY: the index is below the count MediaPipe reported for this array.
                     let set = unsafe { &*raw.face_landmarks.add(f) };
                     if set.landmarks.is_null() {
                         return Vec::new();
                     }
                     (0..set.landmarks_count as usize)
+                        // SAFETY: the index is below the count MediaPipe reported for this array.
                         .map(|i| unsafe { NormalizedLandmark::from_raw(&*set.landmarks.add(i)) })
                         .collect()
                 })
@@ -53,7 +55,9 @@ impl FaceLandmarkerResult {
         } else {
             (0..raw.face_blendshapes_count as usize)
                 .map(|f| {
+                    // SAFETY: the index is below the count MediaPipe reported for this array.
                     let set = unsafe { &*raw.face_blendshapes.add(f) };
+                    // SAFETY: a field of the live result this function's contract covers.
                     unsafe { Category::vec_from_raw(set.categories, set.categories_count) }
                 })
                 .collect()
@@ -64,9 +68,8 @@ impl FaceLandmarkerResult {
         } else {
             (0..raw.facial_transformation_matrixes_count as usize)
                 .map(|i| {
-                    Transform4x4::from_raw(unsafe {
-                        &*raw.facial_transformation_matrixes.add(i)
-                    })
+                    // SAFETY: the index is below the count MediaPipe reported for this array.
+                    Transform4x4::from_raw(unsafe { &*raw.facial_transformation_matrixes.add(i) })
                 })
                 .collect::<Result<Vec<_>>>()?
         };
@@ -79,6 +82,7 @@ impl FaceLandmarkerResult {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct FaceLandmarkerBuilder {
     source: ModelSource,
     delegate: Delegate,
@@ -157,8 +161,10 @@ impl FaceLandmarkerBuilder {
             let converted = if status != sys::MpStatus::kMpOk || result.is_null() {
                 Err(status_only_error(status))
             } else {
+                // SAFETY: status is kMpOk and `result` is non-null, so MediaPipe
+                // handed us a live result of this task's type.
                 unsafe {
-                    FaceLandmarkerResult::from_raw(&*(result as *const sys::MpFaceLandmarkerResult))
+                    FaceLandmarkerResult::from_raw(&*result.cast::<sys::MpFaceLandmarkerResult>())
                 }
             };
             callback(
@@ -179,9 +185,7 @@ impl FaceLandmarkerBuilder {
     fn build_mode(
         self,
         running_mode: sys::MpRunningMode,
-        callback: Option<
-            unsafe extern "C" fn(sys::MpStatus, *const c_void, sys::MpImagePtr, i64),
-        >,
+        callback: Option<unsafe extern "C" fn(sys::MpStatus, *const c_void, sys::MpImagePtr, i64)>,
     ) -> Result<FaceLandmarker> {
         let min_face_detection_confidence = self.min_face_detection_confidence.get();
         let min_face_presence_confidence = self.min_face_presence_confidence.get();
@@ -191,8 +195,12 @@ impl FaceLandmarkerBuilder {
         let hold = ModelHold::new(&self.source)?;
         let (buf, buf_count, path) = hold.parts();
         let delegate = self.delegate.to_raw();
-        let num_faces = self.num_faces.get() as i32;
+        // MediaPipe takes this as a C `int`. Requesting more faces than an i32
+        // can hold is meaningless rather than an error worth a variant, so clamp
+        // instead of wrapping into a negative.
+        let num_faces = i32::try_from(self.num_faces.get()).unwrap_or(i32::MAX);
         let cb: sys::MpFaceLandmarkerOptions_result_callback_fn =
+            // SAFETY: the two fn types differ only in the pointee of the result pointer, which does not change the C ABI.
             callback.map(|f| unsafe { std::mem::transmute(f) });
 
         let mut ptr: sys::MpFaceLandmarkerPtr = ptr::null_mut();
@@ -210,8 +218,7 @@ impl FaceLandmarkerBuilder {
                             model_asset_path: path,
                             file_descriptor: 0,
                             delegate,
-                            host_environment:
-                                sys::MpHostEnvironment::MP_HOST_ENVIRONMENT_UNKNOWN,
+                            host_environment: sys::MpHostEnvironment::MP_HOST_ENVIRONMENT_UNKNOWN,
                             host_system: sys::MpHostSystem::MP_HOST_SYSTEM_UNKNOWN,
                             host_version: ptr::null(),
                             ca_bundle_path: ptr::null(),
@@ -227,7 +234,8 @@ impl FaceLandmarkerBuilder {
                         output_facial_transformation_matrixes: self.output_transformation_matrixes,
                         result_callback: cb,
                     };
-                    lib.raw.MpFaceLandmarkerCreate(&mut opts, &mut ptr, &mut err)
+                    lib.raw
+                        .MpFaceLandmarkerCreate(&mut opts, &mut ptr, &mut err)
                 }
                 Abi::V0_10_35 => {
                     let mut opts = sys::compat::MpFaceLandmarkerOptionsV35 {
@@ -253,6 +261,7 @@ impl FaceLandmarkerBuilder {
         };
 
         if status != sys::MpStatus::kMpOk {
+            // SAFETY: `err` is the out-param of the call that just failed; it is read and freed exactly once here.
             return Err(unsafe { Error::from_status(&lib.raw, status, err) });
         }
         Ok(FaceLandmarker { ptr, closed: false })
@@ -292,7 +301,11 @@ impl FaceLandmarker {
     /// There is deliberately no region-of-interest variant: MediaPipe builds
     /// both face tasks with `roi_allowed=false`, so an ROI is not a runtime
     /// error to guard against, it is a request that cannot be expressed.
-    pub fn detect_rotated(&mut self, image: &Image, rotation: Rotation) -> Result<FaceLandmarkerResult> {
+    pub fn detect_rotated(
+        &mut self,
+        image: &Image,
+        rotation: Rotation,
+    ) -> Result<FaceLandmarkerResult> {
         let raw = rotation.to_raw();
         self.detect_inner(image, Some(&raw), None)
     }
@@ -314,6 +327,7 @@ impl FaceLandmarker {
     ) -> Result<FaceLandmarkerResult> {
         let lib = lib()?;
         let opts = processing.map_or(ptr::null(), |p| p as *const _);
+        // SAFETY: the struct is only pointers and counts, so all-zero is a valid empty result; MediaPipe overwrites it.
         let mut result: sys::MpFaceLandmarkerResult = unsafe { std::mem::zeroed() };
         let mut err = ptr::null_mut();
 
@@ -340,11 +354,14 @@ impl FaceLandmarker {
         };
 
         if status != sys::MpStatus::kMpOk {
+            // SAFETY: `err` is the out-param of the call that just failed; it is read and freed exactly once here.
             return Err(unsafe { Error::from_status(&lib.raw, status, err) });
         }
 
         // Convert first, free second — and free even if conversion failed.
+        // SAFETY: `result` was filled by the call above and is still live.
         let converted = unsafe { FaceLandmarkerResult::from_raw(&result) };
+        // SAFETY: `result` was filled by the Detect call above, everything has been copied out, and it is freed once.
         unsafe { lib.raw.MpFaceLandmarkerCloseResult(&mut result) };
         converted
     }
@@ -358,6 +375,7 @@ impl FaceLandmarker {
         // SAFETY: runs exactly once; joins any worker thread.
         let status = unsafe { lib.raw.MpFaceLandmarkerClose(self.ptr, &mut err) };
         if status != sys::MpStatus::kMpOk {
+            // SAFETY: `err` is the out-param of the call that just failed; it is read and freed exactly once here.
             return Err(unsafe { Error::from_status(&lib.raw, status, err) });
         }
         Ok(())
@@ -398,6 +416,7 @@ impl AsyncTask for FaceLandmarker {
             )
         };
         if status != sys::MpStatus::kMpOk {
+            // SAFETY: `err` is the out-param of the call that just failed; it is read and freed exactly once here.
             return Err(unsafe { Error::from_status(&lib.raw, status, err) });
         }
         Ok(())

@@ -21,16 +21,14 @@ use crate::types::{Rotation, Timestamp};
 /// context to key off, so a fixed pool is the price.
 const SLOT_COUNT: usize = 8;
 
-type RawCallback =
-    unsafe extern "C" fn(sys::MpStatus, *const c_void, sys::MpImagePtr, i64);
+type RawCallback = unsafe extern "C" fn(sys::MpStatus, *const c_void, sys::MpImagePtr, i64);
 
 /// Type-erased per-slot dispatcher: converts the C result and calls the user's
 /// closure. Built by each task module, which knows the concrete result type.
 pub(crate) type Dispatch =
     Box<dyn FnMut(sys::MpStatus, *const c_void, sys::MpImagePtr, i64) + Send>;
 
-static SLOTS: [Mutex<Option<Dispatch>>; SLOT_COUNT] =
-    [const { Mutex::new(None) }; SLOT_COUNT];
+static SLOTS: [Mutex<Option<Dispatch>>; SLOT_COUNT] = [const { Mutex::new(None) }; SLOT_COUNT];
 
 /// A claimed pool entry. Releasing it is what stops callbacks being delivered.
 pub(crate) struct Slot(usize);

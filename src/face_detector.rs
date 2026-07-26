@@ -42,14 +42,17 @@ impl Detection {
         }
         (0..raw.detections_count as usize)
             .map(|i| {
+                // SAFETY: the index is below the count MediaPipe reported for this array.
                 let d = unsafe { &*raw.detections.add(i) };
                 Detection {
                     bounding_box: PixelRect::from_raw(d.bounding_box),
+                    // SAFETY: a field of the live result this function's contract covers.
                     categories: unsafe { Category::vec_from_raw(d.categories, d.categories_count) },
                     keypoints: if d.keypoints.is_null() {
                         Vec::new()
                     } else {
                         (0..d.keypoints_count as usize)
+                            // SAFETY: the index is below the count MediaPipe reported for this array.
                             .map(|k| unsafe { Keypoint::from_raw(&*d.keypoints.add(k)) })
                             .collect()
                     },
@@ -59,6 +62,7 @@ impl Detection {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct FaceDetectorBuilder {
     source: ModelSource,
     delegate: Delegate,
@@ -129,7 +133,8 @@ impl FaceDetectorBuilder {
             let converted = if status != sys::MpStatus::kMpOk || result.is_null() {
                 Err(status_only_error(status))
             } else {
-                Ok(unsafe { Detection::vec_from_raw(&*(result as *const sys::MpDetectionResult)) })
+                // SAFETY: status is kMpOk and `result` is non-null, so MediaPipe handed us a live result of this task's type.
+                Ok(unsafe { Detection::vec_from_raw(&*result.cast::<sys::MpDetectionResult>()) })
             };
             callback(
                 converted,
@@ -149,9 +154,7 @@ impl FaceDetectorBuilder {
     fn build_mode(
         self,
         running_mode: sys::MpRunningMode,
-        callback: Option<
-            unsafe extern "C" fn(sys::MpStatus, *const c_void, sys::MpImagePtr, i64),
-        >,
+        callback: Option<unsafe extern "C" fn(sys::MpStatus, *const c_void, sys::MpImagePtr, i64)>,
     ) -> Result<FaceDetector> {
         let min_detection_confidence = self.min_detection_confidence.get();
         let min_suppression_threshold = self.min_suppression_threshold.get();
@@ -164,6 +167,7 @@ impl FaceDetectorBuilder {
         // The C callback type differs between tasks only in the result pointer
         // type, which is ABI-identical to *const c_void.
         let cb: sys::MpFaceDetectorOptions_result_callback_fn =
+            // SAFETY: the two fn types differ only in the pointee of the result pointer, which does not change the C ABI.
             callback.map(|f| unsafe { std::mem::transmute(f) });
 
         let mut ptr: sys::MpFaceDetectorPtr = ptr::null_mut();
@@ -181,8 +185,7 @@ impl FaceDetectorBuilder {
                             model_asset_path: path,
                             file_descriptor: 0,
                             delegate,
-                            host_environment:
-                                sys::MpHostEnvironment::MP_HOST_ENVIRONMENT_UNKNOWN,
+                            host_environment: sys::MpHostEnvironment::MP_HOST_ENVIRONMENT_UNKNOWN,
                             host_system: sys::MpHostSystem::MP_HOST_SYSTEM_UNKNOWN,
                             host_version: ptr::null(),
                             ca_bundle_path: ptr::null(),
@@ -216,6 +219,7 @@ impl FaceDetectorBuilder {
         };
 
         if status != sys::MpStatus::kMpOk {
+            // SAFETY: `err` is the out-param of the call that just failed; it is read and freed exactly once here.
             return Err(unsafe { Error::from_status(&lib.raw, status, err) });
         }
         Ok(FaceDetector { ptr, closed: false })
@@ -290,10 +294,13 @@ impl FaceDetector {
         // that we hand straight back to MpFaceDetectorCloseResult below.
         let status = unsafe {
             match timestamp_ms {
-                None => {
-                    lib.raw
-                        .MpFaceDetectorDetectImage(self.ptr, image.ptr, opts, &mut result, &mut err)
-                }
+                None => lib.raw.MpFaceDetectorDetectImage(
+                    self.ptr,
+                    image.ptr,
+                    opts,
+                    &mut result,
+                    &mut err,
+                ),
                 Some(ts) => lib.raw.MpFaceDetectorDetectForVideo(
                     self.ptr,
                     image.ptr,
@@ -306,11 +313,14 @@ impl FaceDetector {
         };
 
         if status != sys::MpStatus::kMpOk {
+            // SAFETY: `err` is the out-param of the call that just failed; it is read and freed exactly once here.
             return Err(unsafe { Error::from_status(&lib.raw, status, err) });
         }
 
         // Copy out, then release C memory immediately — nothing borrows it.
+        // SAFETY: `result` was filled by the call above and is still live.
         let detections = unsafe { Detection::vec_from_raw(&result) };
+        // SAFETY: `result` was filled by the Detect call above, everything has been copied out, and it is freed once.
         unsafe { lib.raw.MpFaceDetectorCloseResult(&mut result) };
         Ok(detections)
     }
@@ -335,6 +345,7 @@ impl FaceDetector {
         // thread before returning.
         let status = unsafe { lib.raw.MpFaceDetectorClose(self.ptr, &mut err) };
         if status != sys::MpStatus::kMpOk {
+            // SAFETY: `err` is the out-param of the call that just failed; it is read and freed exactly once here.
             return Err(unsafe { Error::from_status(&lib.raw, status, err) });
         }
         Ok(())
@@ -368,6 +379,7 @@ impl AsyncTask for FaceDetector {
             )
         };
         if status != sys::MpStatus::kMpOk {
+            // SAFETY: `err` is the out-param of the call that just failed; it is read and freed exactly once here.
             return Err(unsafe { Error::from_status(&lib.raw, status, err) });
         }
         Ok(())

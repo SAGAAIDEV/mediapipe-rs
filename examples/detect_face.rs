@@ -8,11 +8,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or_else(|| "models/portrait.jpg".to_owned());
 
     let image = Image::from_file(&path)?;
-    println!(
-        "{path}: {}x{}",
-        image.size().width,
-        image.size().height
-    );
+    println!("{path}: {}x{}", image.size().width, image.size().height);
 
     let mut detector =
         FaceDetector::builder(ModelSource::path("models/blaze_face_short_range.tflite"))

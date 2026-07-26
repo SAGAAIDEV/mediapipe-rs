@@ -30,8 +30,12 @@ impl Image {
         let mut err = ptr::null_mut();
         // SAFETY: `path` is a valid NUL-terminated string that outlives the call;
         // `ptr`/`err` are valid out-params.
-        let status = unsafe { lib.raw.MpImageCreateFromFile(path.as_ptr(), &mut ptr, &mut err) };
+        let status = unsafe {
+            lib.raw
+                .MpImageCreateFromFile(path.as_ptr(), &mut ptr, &mut err)
+        };
         if status != sys::MpStatus::kMpOk {
+            // SAFETY: `err` is the out-param of the call that just failed; it is read and freed exactly once here.
             return Err(unsafe { Error::from_status(&lib.raw, status, err) });
         }
         Ok(Image { ptr })
@@ -47,12 +51,7 @@ impl Image {
         Self::from_u8(size, data, 4, sys::MpImageFormat::kMpImageFormatSrgba)
     }
 
-    fn from_u8(
-        size: Size,
-        data: &[u8],
-        channels: u32,
-        format: sys::MpImageFormat,
-    ) -> Result<Self> {
+    fn from_u8(size: Size, data: &[u8], channels: u32, format: sys::MpImageFormat) -> Result<Self> {
         // The C side trusts the length it is given; a short buffer is an
         // out-of-bounds read inside MediaPipe, so check here.
         let expected = (size.width as usize) * (size.height as usize) * (channels as usize);
@@ -66,6 +65,21 @@ impl Image {
             });
         }
 
+        // `MpImageCreateFromUint8Data` takes the length as a C `int`, and reads
+        // exactly that many bytes. A silent truncation here would hand MediaPipe
+        // a length longer than the buffer on the next wrap-around, so check
+        // rather than cast.
+        let too_large = |_| Error::TooLarge {
+            what: "pixel buffer",
+            len: data.len(),
+            limit: i32::MAX as u64,
+        };
+        let len = i32::try_from(data.len()).map_err(too_large)?;
+        // Implied by the check above, but converted rather than cast so the
+        // reasoning does not live only in a comment.
+        let width = i32::try_from(size.width).map_err(too_large)?;
+        let height = i32::try_from(size.height).map_err(too_large)?;
+
         let lib = lib()?;
         let mut ptr: sys::MpImagePtr = ptr::null_mut();
         let mut err = ptr::null_mut();
@@ -74,15 +88,16 @@ impl Image {
         let status = unsafe {
             lib.raw.MpImageCreateFromUint8Data(
                 format,
-                size.width as i32,
-                size.height as i32,
+                width,
+                height,
                 data.as_ptr(),
-                data.len() as i32,
+                len,
                 &mut ptr,
                 &mut err,
             )
         };
         if status != sys::MpStatus::kMpOk {
+            // SAFETY: `err` is the out-param of the call that just failed; it is read and freed exactly once here.
             return Err(unsafe { Error::from_status(&lib.raw, status, err) });
         }
         Ok(Image { ptr })

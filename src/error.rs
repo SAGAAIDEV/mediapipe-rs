@@ -57,10 +57,7 @@ impl StatusCode {
 #[non_exhaustive]
 pub enum Error {
     #[error("mediapipe: {message} ({code:?})")]
-    Mp {
-        code: StatusCode,
-        message: String,
-    },
+    Mp { code: StatusCode, message: String },
 
     #[error(
         "libmediapipe not found. Set $MEDIAPIPE_LIB to its path, or enable the \
@@ -99,6 +96,13 @@ pub enum Error {
         width: u32,
         height: u32,
         channels: u32,
+    },
+
+    #[error("{what} is {len} bytes, which does not fit the C API's {limit}-byte limit")]
+    TooLarge {
+        what: &'static str,
+        len: usize,
+        limit: u64,
     },
 
     #[error("expected a {rows}x{cols} matrix, got {got_rows}x{got_cols}")]
@@ -142,9 +146,11 @@ impl Error {
         let message = if msg.is_null() {
             String::new()
         } else {
+            // SAFETY: `msg` is non-null here and points at a NUL-terminated string MediaPipe allocated.
             let owned = unsafe { CStr::from_ptr(msg) }
                 .to_string_lossy()
                 .into_owned();
+            // SAFETY: `msg` came from MediaPipe and has not been freed yet.
             unsafe { lib.MpErrorFree(msg) };
             owned
         };
