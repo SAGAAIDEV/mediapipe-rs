@@ -109,6 +109,11 @@ jobs:
         env:
           RUSTFLAGS: -Zsanitizer=leak
           LIBGL_ALWAYS_SOFTWARE: 1
+          # MediaPipe always leaks its GL-context state, so LeakSanitizer always
+          # finds something and would always exit 23. "Any leak" is not the
+          # signal here -- growth with N is -- so let the comparison below be
+          # the only thing that can fail this step.
+          LSAN_OPTIONS: exitcode=0
         run: |
           set -euo pipefail
           run_n() {
@@ -118,10 +123,16 @@ jobs:
           }
           one=$(run_n 1)
           many=$(run_n 50)
-          echo "N=1: ${one:-0} bytes, N=50: ${many:-0} bytes"
+          # An empty capture means the binary never got as far as reporting.
+          # Without this the comparison would be 0 vs 0 and pass vacuously.
+          if [ -z "$one" ] || [ -z "$many" ]; then
+            echo "no LeakSanitizer summary captured (N=1:'$one' N=50:'$many')" >&2
+            exit 1
+          fi
+          echo "N=1: $one bytes, N=50: $many bytes"
           # Generous slack for thread-pool noise; a real per-call leak would
           # multiply the total, not nudge it.
-          if [ "${many:-0}" -gt "$(( ${one:-0} + 65536 ))" ]; then
+          if [ "$many" -gt "$(( one + 65536 ))" ]; then
             echo "leak total grew with iteration count" >&2
             exit 1
           fi
