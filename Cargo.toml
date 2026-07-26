@@ -1,0 +1,28 @@
+[package]
+name = "mediapipe"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "Apache-2.0"
+description = "Safe Rust bindings to the Google MediaPipe Tasks C API"
+repository = "https://github.com/nb/mediapipe-rs"
+keywords = ["mediapipe", "computer-vision", "face-detection", "landmarks", "ml"]
+categories = ["computer-vision", "api-bindings"]
+exclude = ["/models", "/vendor/lib"]
+
+[features]
+default = ["download"]
+# Fetch libmediapipe from the official PyPI wheel into the XDG cache on first use.
+# Turn off for offline/vendored deployments; then $MEDIAPIPE_LIB or a system path
+# must supply the library.
+download = ["dep:ureq", "dep:zip", "dep:sha2"]
+
+[dependencies]
+libloading = "0.8"
+thiserror = "2"
+ureq = { version = "3", optional = true, default-features = false, features = ["rustls"] }
+zip = { version = "6", optional = true, default-features = false, features = ["deflate"] }
+sha2 = { version = "0.10", optional = true }
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
