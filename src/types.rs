@@ -221,6 +221,58 @@ impl NormalizedPoint3 {
     }
 }
 
+/// A 3D point in metres, in a real-world frame attached to the subject.
+///
+/// MediaPipe's *world* landmarks: for hands, the origin is the hand's
+/// approximate geometric centre; for poses, the hips. `MpLandmark` and
+/// `MpNormalizedLandmark` have identical C layouts and nothing structural tells
+/// them apart, which is exactly why this is its own type rather than a
+/// [`NormalizedPoint3`]: there is no image `Size` that relates the two, so this
+/// type has no `to_pixels` and no conversion into or out of image space.
+///
+/// Axes follow the image's: `x` to the right, `y` down, `z` away from the
+/// camera.
+///
+/// ```compile_fail,E0599
+/// # use mediapipe::{Size, WorldPoint3};
+/// fn project(p: WorldPoint3, size: Size) {
+///     p.to_pixels(size); // metres have no pixel projection
+/// }
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct WorldPoint3 {
+    x: f32,
+    y: f32,
+    z: f32,
+}
+
+impl WorldPoint3 {
+    /// Metres.
+    pub const fn x(self) -> f32 {
+        self.x
+    }
+
+    /// Metres.
+    pub const fn y(self) -> f32 {
+        self.y
+    }
+
+    /// Metres.
+    pub const fn z(self) -> f32 {
+        self.z
+    }
+
+    /// Distance in metres.
+    pub fn distance_to(self, other: WorldPoint3) -> f32 {
+        let (dx, dy, dz) = (self.x - other.x, self.y - other.y, self.z - other.z);
+        (dx * dx + dy * dy + dz * dz).sqrt()
+    }
+
+    pub(crate) const fn from_raw(x: f32, y: f32, z: f32) -> Self {
+        Self { x, y, z }
+    }
+}
+
 /// How strongly a model believes something, in `0.0..=1.0`.
 ///
 /// Deliberately has no `From<f32>` and no arithmetic: the point is that every
@@ -466,6 +518,18 @@ pub struct NormalizedLandmark {
     pub name: Option<String>,
 }
 
+/// A landmark in metres — see [`WorldPoint3`] for why it is not a
+/// [`NormalizedLandmark`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct WorldLandmark {
+    pub point: WorldPoint3,
+    /// `None` when the C side's `has_visibility` was false.
+    pub visibility: Option<Confidence>,
+    /// `None` when `has_presence` was false.
+    pub presence: Option<Confidence>,
+    pub name: Option<String>,
+}
+
 // --- conversion out of C memory -------------------------------------------
 //
 // Everything below copies. MediaPipe frees each result the moment the
@@ -535,6 +599,20 @@ impl NormalizedLandmark {
     pub(crate) unsafe fn from_raw(l: &sys::MpNormalizedLandmark) -> Self {
         NormalizedLandmark {
             point: NormalizedPoint3::from_raw(l.x, l.y, l.z),
+            visibility: l.has_visibility.then(|| Confidence::from_raw(l.visibility)),
+            presence: l.has_presence.then(|| Confidence::from_raw(l.presence)),
+            // SAFETY: a field of the live result this function's contract covers.
+            name: unsafe { opt_string(l.name) },
+        }
+    }
+}
+
+impl WorldLandmark {
+    /// # Safety
+    /// `l` must be a live `MpLandmark` from a MediaPipe result.
+    pub(crate) unsafe fn from_raw(l: &sys::MpLandmark) -> Self {
+        WorldLandmark {
+            point: WorldPoint3::from_raw(l.x, l.y, l.z),
             visibility: l.has_visibility.then(|| Confidence::from_raw(l.visibility)),
             presence: l.has_presence.then(|| Confidence::from_raw(l.presence)),
             // SAFETY: a field of the live result this function's contract covers.

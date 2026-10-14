@@ -241,7 +241,7 @@ under a `#!/bin/sh` shebang.
 ## Before committing
 
 ```sh
-cargo test                                    # 15 integration + 7 doc tests
+cargo test                                    # 21 integration + 8 doc tests
 cargo clippy --all-targets                    # must be silent
 cargo clippy --no-default-features --all-targets
 MEDIAPIPE_LIB=… cargo test --no-default-features

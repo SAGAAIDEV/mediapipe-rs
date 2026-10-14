@@ -79,7 +79,7 @@ the identical field list makes it.
 |---|---|---|---|
 | `face_detector` | image, video, stream | no | done |
 | `face_landmarker` | image, video, stream | no | done |
-| `hand_landmarker` | image, video, stream | no | `MpCategories* handedness` alongside the landmarks |
+| `hand_landmarker` | image, video, stream | no | done; `min_tracking_confidence` must be > 0 (`HandAssociationCalculator` aborts on 0) |
 | `pose_landmarker` | image, video, stream | no | `MpImagePtr* segmentation_masks` + world landmarks |
 | `gesture_recognizer` | image, video, stream | no | two `MpClassifierOptions` sub-structs |
 | `holistic_landmarker` | image, video, stream | no | face + pose + both hands; fields are **by value**, not pointer+count |
@@ -137,7 +137,8 @@ first.
 
 New work, in rough order of how much thought it needs:
 
-- **`WorldPoint3`** for pose and holistic world landmarks — see the trap above.
+- ~~**`WorldPoint3`**~~ — done with `hand_landmarker`; pose and holistic reuse
+  it (and `WorldLandmark`).
 - **Segmentation masks**, which come back as `MpImagePtr*` rather than plain
   structs, so they need a `Mask` type over the existing `Image` (and category
   masks and confidence masks mean different things per pixel).

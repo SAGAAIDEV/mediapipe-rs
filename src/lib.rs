@@ -23,6 +23,7 @@
 mod error;
 mod face_detector;
 mod face_landmarker;
+mod hand_landmarker;
 mod image;
 mod stream;
 mod types;
@@ -35,11 +36,14 @@ pub use face_detector::{Detection, FaceDetector, FaceDetectorBuilder, FaceDetect
 pub use face_landmarker::{
     FaceLandmarker, FaceLandmarkerBuilder, FaceLandmarkerResult, FaceLandmarkerStream,
 };
+pub use hand_landmarker::{
+    Hand, HandLandmarker, HandLandmarkerBuilder, HandLandmarkerResult, HandLandmarkerStream,
+};
 pub use image::{Image, ImageRef};
 pub use loader::{LibrarySource, MEDIAPIPE_VERSION};
 pub use stream::{AsyncTask, Stream};
 pub use types::{
     Category, Confidence, Delegate, IouThreshold, Keypoint, ModelSource, NormalizedLandmark,
     NormalizedPoint2, NormalizedPoint3, PixelPoint, PixelRect, Rotation, Size, Timestamp,
-    Transform4x4,
+    Transform4x4, WorldLandmark, WorldPoint3,
 };

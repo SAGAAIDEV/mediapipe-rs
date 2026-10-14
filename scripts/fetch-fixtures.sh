@@ -18,5 +18,9 @@ fetch https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landm
       face_landmarker.task
 fetch https://storage.googleapis.com/mediapipe-assets/portrait.jpg \
       portrait.jpg
+fetch https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task \
+      hand_landmarker.task
+fetch https://storage.googleapis.com/mediapipe-assets/right_hands.jpg \
+      right_hands.jpg
 
 ls -l models

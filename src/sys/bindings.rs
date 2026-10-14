@@ -536,6 +536,80 @@ const _: () = {
 };
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
+pub struct MpHandLandmarkerResult {
+    pub handedness: *mut MpCategories,
+    pub handedness_count: u32,
+    pub hand_landmarks: *mut MpNormalizedLandmarks,
+    pub hand_landmarks_count: u32,
+    pub hand_world_landmarks: *mut MpLandmarks,
+    pub hand_world_landmarks_count: u32,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of MpHandLandmarkerResult"][::std::mem::size_of::<MpHandLandmarkerResult>() - 48usize];
+    ["Alignment of MpHandLandmarkerResult"]
+        [::std::mem::align_of::<MpHandLandmarkerResult>() - 8usize];
+    ["Offset of field: MpHandLandmarkerResult::handedness"]
+        [::std::mem::offset_of!(MpHandLandmarkerResult, handedness) - 0usize];
+    ["Offset of field: MpHandLandmarkerResult::handedness_count"]
+        [::std::mem::offset_of!(MpHandLandmarkerResult, handedness_count) - 8usize];
+    ["Offset of field: MpHandLandmarkerResult::hand_landmarks"]
+        [::std::mem::offset_of!(MpHandLandmarkerResult, hand_landmarks) - 16usize];
+    ["Offset of field: MpHandLandmarkerResult::hand_landmarks_count"]
+        [::std::mem::offset_of!(MpHandLandmarkerResult, hand_landmarks_count) - 24usize];
+    ["Offset of field: MpHandLandmarkerResult::hand_world_landmarks"]
+        [::std::mem::offset_of!(MpHandLandmarkerResult, hand_world_landmarks) - 32usize];
+    ["Offset of field: MpHandLandmarkerResult::hand_world_landmarks_count"]
+        [::std::mem::offset_of!(MpHandLandmarkerResult, hand_world_landmarks_count) - 40usize];
+};
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct MpHandLandmarkerInternal {
+    _unused: [u8; 0],
+}
+pub type MpHandLandmarkerPtr = *mut MpHandLandmarkerInternal;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct MpHandLandmarkerOptions {
+    pub base_options: MpBaseOptions,
+    pub running_mode: MpRunningMode,
+    pub num_hands: ::std::os::raw::c_int,
+    pub min_hand_detection_confidence: f32,
+    pub min_hand_presence_confidence: f32,
+    pub min_tracking_confidence: f32,
+    pub result_callback: MpHandLandmarkerOptions_result_callback_fn,
+}
+pub type MpHandLandmarkerOptions_result_callback_fn = ::std::option::Option<
+    unsafe extern "C" fn(
+        status: MpStatus,
+        result: *const MpHandLandmarkerResult,
+        image: MpImagePtr,
+        timestamp_ms: i64,
+    ),
+>;
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of MpHandLandmarkerOptions"]
+        [::std::mem::size_of::<MpHandLandmarkerOptions>() - 104usize];
+    ["Alignment of MpHandLandmarkerOptions"]
+        [::std::mem::align_of::<MpHandLandmarkerOptions>() - 8usize];
+    ["Offset of field: MpHandLandmarkerOptions::base_options"]
+        [::std::mem::offset_of!(MpHandLandmarkerOptions, base_options) - 0usize];
+    ["Offset of field: MpHandLandmarkerOptions::running_mode"]
+        [::std::mem::offset_of!(MpHandLandmarkerOptions, running_mode) - 72usize];
+    ["Offset of field: MpHandLandmarkerOptions::num_hands"]
+        [::std::mem::offset_of!(MpHandLandmarkerOptions, num_hands) - 76usize];
+    ["Offset of field: MpHandLandmarkerOptions::min_hand_detection_confidence"]
+        [::std::mem::offset_of!(MpHandLandmarkerOptions, min_hand_detection_confidence) - 80usize];
+    ["Offset of field: MpHandLandmarkerOptions::min_hand_presence_confidence"]
+        [::std::mem::offset_of!(MpHandLandmarkerOptions, min_hand_presence_confidence) - 84usize];
+    ["Offset of field: MpHandLandmarkerOptions::min_tracking_confidence"]
+        [::std::mem::offset_of!(MpHandLandmarkerOptions, min_tracking_confidence) - 88usize];
+    ["Offset of field: MpHandLandmarkerOptions::result_callback"]
+        [::std::mem::offset_of!(MpHandLandmarkerOptions, result_callback) - 96usize];
+};
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
 pub struct MpImageSegmenterResult {
     pub confidence_masks: *mut MpImagePtr,
     pub confidence_masks_count: u32,
@@ -864,6 +938,54 @@ pub struct MpLib {
         ) -> MpStatus,
         ::libloading::Error,
     >,
+    pub MpHandLandmarkerCreate: Result<
+        unsafe extern "C" fn(
+            options: *mut MpHandLandmarkerOptions,
+            landmarker: *mut MpHandLandmarkerPtr,
+            error_msg: *mut *mut ::std::os::raw::c_char,
+        ) -> MpStatus,
+        ::libloading::Error,
+    >,
+    pub MpHandLandmarkerDetectImage: Result<
+        unsafe extern "C" fn(
+            landmarker: MpHandLandmarkerPtr,
+            image: MpImagePtr,
+            options: *const MpImageProcessingOptions,
+            result: *mut MpHandLandmarkerResult,
+            error_msg: *mut *mut ::std::os::raw::c_char,
+        ) -> MpStatus,
+        ::libloading::Error,
+    >,
+    pub MpHandLandmarkerDetectForVideo: Result<
+        unsafe extern "C" fn(
+            landmarker: MpHandLandmarkerPtr,
+            image: MpImagePtr,
+            options: *const MpImageProcessingOptions,
+            timestamp_ms: i64,
+            result: *mut MpHandLandmarkerResult,
+            error_msg: *mut *mut ::std::os::raw::c_char,
+        ) -> MpStatus,
+        ::libloading::Error,
+    >,
+    pub MpHandLandmarkerDetectAsync: Result<
+        unsafe extern "C" fn(
+            landmarker: MpHandLandmarkerPtr,
+            image: MpImagePtr,
+            options: *const MpImageProcessingOptions,
+            timestamp_ms: i64,
+            error_msg: *mut *mut ::std::os::raw::c_char,
+        ) -> MpStatus,
+        ::libloading::Error,
+    >,
+    pub MpHandLandmarkerCloseResult:
+        Result<unsafe extern "C" fn(result: *mut MpHandLandmarkerResult), ::libloading::Error>,
+    pub MpHandLandmarkerClose: Result<
+        unsafe extern "C" fn(
+            landmarker: MpHandLandmarkerPtr,
+            error_msg: *mut *mut ::std::os::raw::c_char,
+        ) -> MpStatus,
+        ::libloading::Error,
+    >,
     pub MpInteractiveSegmenterLegacyCreate: Result<
         unsafe extern "C" fn(
             options: *mut MpInteractiveSegmenterLegacyOptions,
@@ -965,6 +1087,18 @@ impl MpLib {
             unsafe { __library.get(b"MpFaceLandmarkerCloseResult\0") }.map(|sym| *sym);
         let MpFaceLandmarkerClose =
             unsafe { __library.get(b"MpFaceLandmarkerClose\0") }.map(|sym| *sym);
+        let MpHandLandmarkerCreate =
+            unsafe { __library.get(b"MpHandLandmarkerCreate\0") }.map(|sym| *sym);
+        let MpHandLandmarkerDetectImage =
+            unsafe { __library.get(b"MpHandLandmarkerDetectImage\0") }.map(|sym| *sym);
+        let MpHandLandmarkerDetectForVideo =
+            unsafe { __library.get(b"MpHandLandmarkerDetectForVideo\0") }.map(|sym| *sym);
+        let MpHandLandmarkerDetectAsync =
+            unsafe { __library.get(b"MpHandLandmarkerDetectAsync\0") }.map(|sym| *sym);
+        let MpHandLandmarkerCloseResult =
+            unsafe { __library.get(b"MpHandLandmarkerCloseResult\0") }.map(|sym| *sym);
+        let MpHandLandmarkerClose =
+            unsafe { __library.get(b"MpHandLandmarkerClose\0") }.map(|sym| *sym);
         let MpInteractiveSegmenterLegacyCreate =
             unsafe { __library.get(b"MpInteractiveSegmenterLegacyCreate\0") }.map(|sym| *sym);
         let MpInteractiveSegmenterLegacySegmentImage =
@@ -1011,6 +1145,12 @@ impl MpLib {
             MpFaceLandmarkerDetectAsync,
             MpFaceLandmarkerCloseResult,
             MpFaceLandmarkerClose,
+            MpHandLandmarkerCreate,
+            MpHandLandmarkerDetectImage,
+            MpHandLandmarkerDetectForVideo,
+            MpHandLandmarkerDetectAsync,
+            MpHandLandmarkerCloseResult,
+            MpHandLandmarkerClose,
             MpInteractiveSegmenterLegacyCreate,
             MpInteractiveSegmenterLegacySegmentImage,
             MpInteractiveSegmenterLegacyCloseResult,
@@ -1496,6 +1636,100 @@ impl MpLib {
         unsafe {
             (self
                 .MpFaceLandmarkerClose
+                .as_ref()
+                .expect("Expected function, got error."))(landmarker, error_msg)
+        }
+    }
+    pub unsafe fn MpHandLandmarkerCreate(
+        &self,
+        options: *mut MpHandLandmarkerOptions,
+        landmarker: *mut MpHandLandmarkerPtr,
+        error_msg: *mut *mut ::std::os::raw::c_char,
+    ) -> MpStatus {
+        unsafe {
+            (self
+                .MpHandLandmarkerCreate
+                .as_ref()
+                .expect("Expected function, got error."))(options, landmarker, error_msg)
+        }
+    }
+    pub unsafe fn MpHandLandmarkerDetectImage(
+        &self,
+        landmarker: MpHandLandmarkerPtr,
+        image: MpImagePtr,
+        options: *const MpImageProcessingOptions,
+        result: *mut MpHandLandmarkerResult,
+        error_msg: *mut *mut ::std::os::raw::c_char,
+    ) -> MpStatus {
+        unsafe {
+            (self
+                .MpHandLandmarkerDetectImage
+                .as_ref()
+                .expect("Expected function, got error."))(
+                landmarker, image, options, result, error_msg,
+            )
+        }
+    }
+    pub unsafe fn MpHandLandmarkerDetectForVideo(
+        &self,
+        landmarker: MpHandLandmarkerPtr,
+        image: MpImagePtr,
+        options: *const MpImageProcessingOptions,
+        timestamp_ms: i64,
+        result: *mut MpHandLandmarkerResult,
+        error_msg: *mut *mut ::std::os::raw::c_char,
+    ) -> MpStatus {
+        unsafe {
+            (self
+                .MpHandLandmarkerDetectForVideo
+                .as_ref()
+                .expect("Expected function, got error."))(
+                landmarker,
+                image,
+                options,
+                timestamp_ms,
+                result,
+                error_msg,
+            )
+        }
+    }
+    pub unsafe fn MpHandLandmarkerDetectAsync(
+        &self,
+        landmarker: MpHandLandmarkerPtr,
+        image: MpImagePtr,
+        options: *const MpImageProcessingOptions,
+        timestamp_ms: i64,
+        error_msg: *mut *mut ::std::os::raw::c_char,
+    ) -> MpStatus {
+        unsafe {
+            (self
+                .MpHandLandmarkerDetectAsync
+                .as_ref()
+                .expect("Expected function, got error."))(
+                landmarker,
+                image,
+                options,
+                timestamp_ms,
+                error_msg,
+            )
+        }
+    }
+    pub unsafe fn MpHandLandmarkerCloseResult(&self, result: *mut MpHandLandmarkerResult) {
+        unsafe {
+            (self
+                .MpHandLandmarkerCloseResult
+                .as_ref()
+                .expect("Expected function, got error."))(result)
+        }
+    }
+    pub unsafe fn MpHandLandmarkerClose(
+        &self,
+        landmarker: MpHandLandmarkerPtr,
+        error_msg: *mut *mut ::std::os::raw::c_char,
+    ) -> MpStatus {
+        unsafe {
+            (self
+                .MpHandLandmarkerClose
                 .as_ref()
                 .expect("Expected function, got error."))(landmarker, error_msg)
         }

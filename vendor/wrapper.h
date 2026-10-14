@@ -23,5 +23,7 @@
 #include "mediapipe/tasks/c/vision/face_detector/face_detector.h"
 #include "mediapipe/tasks/c/vision/face_landmarker/face_landmarker.h"
 #include "mediapipe/tasks/c/vision/face_landmarker/face_landmarker_result.h"
+#include "mediapipe/tasks/c/vision/hand_landmarker/hand_landmarker.h"
+#include "mediapipe/tasks/c/vision/hand_landmarker/hand_landmarker_result.h"
 
 #include "mediapipe/tasks/c/vision/interactive_segmenter_legacy/interactive_segmenter_legacy.h"

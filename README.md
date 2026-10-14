@@ -7,8 +7,8 @@
 [![MSRV](https://img.shields.io/badge/rustc-1.85%2B-orange.svg)](https://blog.rust-lang.org/2025/02/20/Rust-1.85.0.html)
 [![MediaPipe](https://img.shields.io/badge/mediapipe-0.10.35-4285F4.svg)](https://github.com/google-ai-edge/mediapipe/releases/tag/v0.10.35)
 
-Safe Rust bindings to the [MediaPipe Tasks C API][c-api]. Face detection and face
-landmarks today; the same shape extends to the rest of MediaPipe.
+Safe Rust bindings to the [MediaPipe Tasks C API][c-api]. Face detection, face
+landmarks and hand landmarks today; the same shape extends to the rest of MediaPipe.
 
 Every other Rust binding to MediaPipe is either abandoned (2020–2022) or
 WebAssembly-only, and most wrap the Solutions API that Google deprecated in 2023.
