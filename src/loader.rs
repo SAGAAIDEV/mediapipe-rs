@@ -260,7 +260,7 @@ fn fetch(dest: &Path) -> Result<PathBuf> {
         .find(|&i| {
             zip.by_index(i)
                 .ok()
-                .is_some_and(|f| f.name().ends_with(TARGET.lib_file_name))
+                .is_some_and(|f| f.name().is_ok_and(|n| n.ends_with(TARGET.lib_file_name)))
         })
         .ok_or_else(|| Error::Download(format!("wheel contains no {}", TARGET.lib_file_name)))?;
 

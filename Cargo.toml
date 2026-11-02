@@ -2,7 +2,7 @@
 name = "mediapipe"
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.88"
 license = "Apache-2.0"
 description = "Safe Rust bindings to the Google MediaPipe Tasks C API"
 repository = "https://github.com/nikicat/mediapipe-rs"
@@ -21,7 +21,7 @@ download = ["dep:ureq", "dep:zip", "dep:sha2"]
 libloading = "0.8"
 thiserror = "2"
 ureq = { version = "3", optional = true, default-features = false, features = ["rustls"] }
-zip = { version = "6", optional = true, default-features = false, features = ["deflate"] }
+zip = { version = "9", optional = true, default-features = false, features = ["deflate"] }
 sha2 = { version = "0.10", optional = true }
 
 [lints.rust]
